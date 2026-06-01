@@ -1,6 +1,7 @@
 import logging
 import signal
 import sys
+import subprocess
 from typing import Any, Dict
 
 import Xlib.X
@@ -9,6 +10,7 @@ import Xlib.protocol.event as xevent
 
 from .state import QWMState, WindowState
 from ..x11.display import XDisplay
+from ..input.keybinds import KeybindRegistry
 
 logger = logging.getLogger("qwm.wm")
 
@@ -20,6 +22,7 @@ class WindowManager:
         self.config = config
         self.state = QWMState()
         self.display = XDisplay()  # $DISPLAY yoksa burada RuntimeError fırlatır
+        self.keybinds = KeybindRegistry(self.display)
 
     # ------------------------------------------------------------------ #
     # Başlangıç                                                              #
@@ -34,8 +37,36 @@ class WindowManager:
         signal.signal(signal.SIGINT, self._handle_signal)
         signal.signal(signal.SIGTERM, self._handle_signal)
 
+        self._setup_keybinds()
+
         # Halihazırda açık olan pencereleri yönetim altına al
         self._adopt_existing_windows()
+
+    def _setup_keybinds(self):
+        terminal_cmd = self.config.get("general", {}).get("terminal", "xterm")
+        launcher_cmd = self.config.get("general", {}).get("launcher", "dmenu_run")
+
+        # Kısayolları kaydet
+        self.keybinds.register("Mod4-Return", lambda: subprocess.Popen(terminal_cmd.split()))
+        self.keybinds.register("Mod4-d", lambda: subprocess.Popen(launcher_cmd.split()))
+        self.keybinds.register("Mod4-q", self._close_active_window)
+        self.keybinds.register("Mod4-Shift-q", self._quit_wm)
+        
+    def _close_active_window(self):
+        if self.state.active_window:
+            logger.info(f"Pencere kapatılıyor: {self.state.active_window}")
+            try:
+                # Gerçekte WM_DELETE_WINDOW client message gönderilir veya XKillClient
+                # Şimdilik basitçe XKillClient kullanalım
+                self.display.display.kill_client(self.state.active_window)
+                self.display.flush()
+            except Exception as e:
+                logger.error(f"Pencere kapatılamadı: {e}")
+                
+    def _quit_wm(self):
+        logger.info("Çıkış kısayolu tetiklendi")
+        self.state.running = False
+
 
     def _handle_signal(self, signum, frame):
         """SIGINT / SIGTERM — döngüden çık."""
@@ -83,6 +114,7 @@ class WindowManager:
         """Dispatch X11 events to appropriate handlers."""
         etype = event.type
         handlers = {
+            Xlib.X.KeyPress:         self._on_key_press,
             Xlib.X.MapRequest:       self._on_map_request,
             Xlib.X.DestroyNotify:    self._on_destroy_notify,
             Xlib.X.UnmapNotify:      self._on_unmap_notify,
@@ -101,6 +133,10 @@ class WindowManager:
     # ------------------------------------------------------------------ #
     # Olay işleyicileri                                                   #
     # ------------------------------------------------------------------ #
+
+    def _on_key_press(self, event):
+        """Klavye kısayollarını işle."""
+        self.keybinds.dispatch(event)
 
     def _on_map_request(self, event):
         """Yeni pencere gösterilmek istiyor."""
