@@ -21,8 +21,12 @@ def main():
     try:
         wm = QWM(reset_config=args.reset_config, debug=args.debug)
         wm.run()
+    except RuntimeError as e:
+        # Beklenen başlatma hataları ($DISPLAY yok, başka WM çalışıyor...)
+        logging.error(f"QWM başlatılamadı: {e}")
+        sys.exit(1)
     except Exception as e:
-        logging.exception("Fatal error in QWM")
+        logging.exception("QWM'de kritik hata")
         sys.exit(1)
 
 if __name__ == "__main__":
