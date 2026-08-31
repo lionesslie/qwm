@@ -12,6 +12,7 @@ def is_nvidia_gpu() -> bool:
 
 
 def get_connected_outputs():
+    """xrandr'dan bagli ekran (output) isimlerini dondurur (orn. ['HDMI-0', 'DP-0'])."""
     outputs = []
     try:
         out = subprocess.run(["xrandr", "--query"], capture_output=True, text=True, timeout=3).stdout
@@ -27,7 +28,7 @@ def apply_nvidia_optimizations(cfg):
     if not getattr(cfg, "NVIDIA_OPTIMIZATIONS_ENABLED", False):
         return
     if not is_nvidia_gpu():
-        print("[QWM] NVIDIA GPU bulunamadi, ilgili optimizasyonlar atlaniyor.")
+        print("[QWM] NVIDIA GPU bulunamadi (VM olabilir), ilgili optimizasyonlar atlaniyor.")
         return
 
     for key, value in getattr(cfg, "NVIDIA_ENV_VARS", {}).items():

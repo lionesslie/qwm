@@ -13,7 +13,7 @@ if ! command -v Xephyr &> /dev/null; then
     fi
 fi
 
-echo "Xephyr aciliyor (1280x800)... Kapatmak icin bu pencereyi kapatabilirsiniz."
+echo "Xephyr aciliyor (1280x800)..."
 Xephyr -br -ac -noreset -screen 1280x800 :1 &
 XEPHYR_PID=$!
 sleep 1

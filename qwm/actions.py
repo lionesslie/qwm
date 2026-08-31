@@ -24,7 +24,7 @@ def kill_window(wm, _):
             wm.display.kill_client(win.id)
         except Exception:
             pass
-    wm.display.sync()
+    wm.display.flush()
 
 
 def focus_next(wm, _):
@@ -49,8 +49,48 @@ def toggle_floating(wm, _):
     wm.toggle_floating_focused()
 
 
+def center_floating(wm, _):
+    wm.center_floating_focused()
+
+
+def grow_floating(wm, _):
+    wm.resize_floating_focused(1)
+
+
+def shrink_floating(wm, _):
+    wm.resize_floating_focused(-1)
+
+
 def swap_master(wm, _):
     wm.swap_with_master()
+
+
+def move_window_next(wm, _):
+    wm.move_window(1)
+
+
+def move_window_prev(wm, _):
+    wm.move_window(-1)
+
+
+def cycle_layout(wm, _):
+    wm.cycle_layout()
+
+
+def toggle_monocle(wm, _):
+    wm.toggle_monocle()
+
+
+def toggle_gaps(wm, _):
+    wm.toggle_gaps()
+
+
+def toggle_scratchpad(wm, cmd):
+    wm.toggle_scratchpad(cmd)
+
+
+def toggle_game_mode(wm, _):
+    wm.toggle_game_mode()
 
 
 def switch_workspace(wm, idx):
@@ -77,7 +117,17 @@ ACTIONS = {
     "resize_master": resize_master,
     "toggle_fullscreen": toggle_fullscreen,
     "toggle_floating": toggle_floating,
+    "center_floating": center_floating,
+    "grow_floating": grow_floating,
+    "shrink_floating": shrink_floating,
     "swap_master": swap_master,
+    "move_window_next": move_window_next,
+    "move_window_prev": move_window_prev,
+    "cycle_layout": cycle_layout,
+    "toggle_monocle": toggle_monocle,
+    "toggle_gaps": toggle_gaps,
+    "toggle_scratchpad": toggle_scratchpad,
+    "toggle_game_mode": toggle_game_mode,
     "switch_workspace": switch_workspace,
     "move_to_workspace": move_to_workspace,
     "quit_wm": quit_wm,

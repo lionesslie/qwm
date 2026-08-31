@@ -41,16 +41,22 @@ def install_dependencies():
     pm = detect_package_manager()
     print(f"[*] Paket yoneticisi: {pm or 'bulunamadi'}")
     if pm is None:
-        print("[!] Elle kurun: python3-xlib, xterm, dmenu, lightdm")
+        print("[!] Elle kurun: python3-xlib, xterm, dmenu, alacritty, rofi, feh, lightdm")
         return
 
     packages = {
         "apt-get": ["python3", "python3-pip", "python3-xlib", "xterm", "dmenu",
-                    "lightdm", "lightdm-gtk-greeter"],
-        "dnf":     ["python3", "python3-pip", "python3-xlib", "xterm", "dmenu", "lightdm"],
+                    "alacritty", "rofi", "feh",
+                    "lightdm", "lightdm-gtk-greeter", "x11-xserver-utils"],
+        "dnf":     ["python3", "python3-pip", "python3-xlib", "xterm", "dmenu",
+                    "alacritty", "rofi", "feh",
+                    "lightdm", "xorg-x11-server-utils"],
         "pacman":  ["python", "python-pip", "python-xlib", "xterm", "dmenu",
-                    "lightdm", "lightdm-gtk-greeter"],
-        "zypper":  ["python3", "python3-pip", "python3-Xlib", "xterm", "dmenu", "lightdm"],
+                    "alacritty", "rofi", "feh",
+                    "lightdm", "lightdm-gtk-greeter", "xorg-xset"],
+        "zypper":  ["python3", "python3-pip", "python3-Xlib", "xterm", "dmenu",
+                    "alacritty", "rofi", "feh",
+                    "lightdm", "xorg-x11-server-utils"],
     }[pm]
 
     print("[*] Bagimliliklar kuruluyor...")
@@ -143,6 +149,12 @@ def install():
 1) Once test edin (onerilir):
      ./test-xephyr.sh
 2) Sorunsuzsa oturumu kapatin, LightDM'de "QWM" oturumunu secin.
+
+Varsayilan terminal: alacritty (Super+Enter)
+Varsayilan baslatici: rofi (Super+D)
+Duvar kagidi: feh ile ~/.config/qwm/wallpaper.jpg (varsa) otomatik ayarlanir.
+Oyun modu: Super+G (manuel) veya bilinen oyun/launcher pencereleri
+           acildiginda otomatik devreye girer.
 
 Config: ~/.config/qwm/config.py
 Log:    ~/.local/share/qwm/qwm.log

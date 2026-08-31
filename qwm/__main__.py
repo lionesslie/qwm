@@ -1,10 +1,25 @@
 """Giris noktasi: `python3 -m qwm`
-Loglama + hata durumunda siyah ekranda kilitlenmeyi onleyen guvenlik agi icerir.
+Loglama + hata durumunda siyah ekranda kilitlenmeyi onleyen guvenlik agi
++ klavye tekrar hizi ayari (VM'lerde "yapisan tus" hissini azaltir) icerir.
 """
 import os
 import subprocess
 import sys
 import traceback
+
+
+def apply_keyboard_settings(cfg):
+    """VM ortamlarinda bazen klavye tekrar hizi cok yavas/bozuk gelir,
+    bu da yazarken/silerken 'takilma' veya 'yapisan tus' hissi verir."""
+    delay = getattr(cfg, "KEYBOARD_REPEAT_DELAY", None)
+    rate = getattr(cfg, "KEYBOARD_REPEAT_RATE", None)
+    if delay and rate:
+        try:
+            subprocess.run(["xset", "r", "rate", str(delay), str(rate)],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+            print(f"[QWM] Klavye tekrar hizi ayarlandi: delay={delay}ms rate={rate}Hz")
+        except Exception as exc:
+            print(f"[QWM] Klavye ayari uygulanamadi: {exc}")
 
 
 def main():
@@ -20,6 +35,7 @@ def main():
         from qwm.wm import WM
 
         cfg = config.load_config()
+        apply_keyboard_settings(cfg)
         nvidia.apply_nvidia_optimizations(cfg)
 
         for cmd in getattr(cfg, "AUTOSTART", []):
@@ -46,7 +62,6 @@ def main():
                                f"tail -n 40 {log_path}; exec bash'"])
         except FileNotFoundError:
             pass
-        # Sonsuz beklemek yerine, X session'in kapanmasina izin ver.
         import time
         time.sleep(5)
         sys.exit(1)
