@@ -1,6 +1,7 @@
 package wm
 
 import (
+    "encoding/binary"
     "log"
     "os/exec"
 
@@ -150,6 +151,10 @@ func (w *WM) Manage(win xproto.Window) {
     xproto.ChangeWindowAttributes(w.X.Conn(), win, xproto.CwBorderPixel, []uint32{color})
 
     xwindow.New(w.X, win).Listen(xproto.EventMaskEnterWindow | xproto.EventMaskPropertyChange)
+    xevent.EnterNotifyFun(func(X *xgbutil.XUtil, e xevent.EnterNotifyEvent) {
+        w.focusByWindow(win)
+    }).Connect(w.X, win)
+
     xproto.MapWindow(w.X.Conn(), win)
     w.Focus(win)
     w.Tile(w.CurWs)
@@ -160,8 +165,16 @@ func (w *WM) Unmanage(win xproto.Window) {
         for i, c := range ws.Clients {
             if c.Win == win {
                 ws.Clients = append(ws.Clients[:i], ws.Clients[i+1:]...)
-                if ws.Focused >= len(ws.Clients) {
-                    ws.Focused = len(ws.Clients) - 1
+                if len(ws.Clients) == 0 {
+                    ws.Focused = -1
+                    w.Focused = 0
+                } else {
+                    if ws.Focused >= len(ws.Clients) {
+                        ws.Focused = len(ws.Clients) - 1
+                    }
+                    if idx == w.CurWs {
+                        w.Focus(ws.Clients[ws.Focused].Win)
+                    }
                 }
                 w.Tile(idx)
                 return
@@ -170,7 +183,21 @@ func (w *WM) Unmanage(win xproto.Window) {
     }
 }
 
+func (w *WM) focusByWindow(win xproto.Window) {
+    ws := w.Workspaces[w.CurWs]
+    for i, c := range ws.Clients {
+        if c.Win == win {
+            ws.Focused = i
+            w.Focus(win)
+            return
+        }
+    }
+}
+
 func (w *WM) Focus(win xproto.Window) {
+    if win == 0 {
+        return
+    }
     w.Focused = win
     xproto.SetInputFocus(w.X.Conn(), xproto.InputFocusPointerRoot, win, xproto.TimeCurrentTime)
     active := hexToPixel(w.X, w.Cfg.General.BorderActive)
@@ -187,22 +214,52 @@ func (w *WM) Focus(win xproto.Window) {
     ewmh.ActiveWindowSet(w.X, win)
 }
 
+func (w *WM) supportsDeleteProtocol(win xproto.Window) bool {
+    protoAtom, err := xprop.Atm(w.X, "WM_PROTOCOLS")
+    if err != nil {
+        return false
+    }
+    deleteAtom, err := xprop.Atm(w.X, "WM_DELETE_WINDOW")
+    if err != nil {
+        return false
+    }
+    reply, err := xproto.GetProperty(w.X.Conn(), false, win, protoAtom, xproto.AtomAtom, 0, 64).Reply()
+    if err != nil || reply == nil || reply.ValueLen == 0 {
+        return false
+    }
+    data := reply.Value
+    for i := 0; i+4 <= len(data); i += 4 {
+        a := xproto.Atom(binary.LittleEndian.Uint32(data[i : i+4]))
+        if a == deleteAtom {
+            return true
+        }
+    }
+    return false
+}
+
+func (w *WM) sendDeleteMessage(win xproto.Window) {
+    protoAtom, err1 := xprop.Atm(w.X, "WM_PROTOCOLS")
+    deleteAtom, err2 := xprop.Atm(w.X, "WM_DELETE_WINDOW")
+    if err1 != nil || err2 != nil {
+        return
+    }
+    cm, err := xevent.NewClientMessage(32, win, protoAtom, int(deleteAtom))
+    if err == nil {
+        xproto.SendEvent(w.X.Conn(), false, win, xproto.EventMaskNoEvent, string(cm.Bytes()))
+    }
+}
+
 func (w *WM) CloseFocused() {
     ws := w.Workspaces[w.CurWs]
     if ws.Focused < 0 || ws.Focused >= len(ws.Clients) {
         return
     }
     win := ws.Clients[ws.Focused].Win
-    protoAtom, err1 := xprop.Atm(w.X, "WM_PROTOCOLS")
-    deleteAtom, err2 := xprop.Atm(w.X, "WM_DELETE_WINDOW")
-    if err1 == nil && err2 == nil {
-        cm, err := xevent.NewClientMessage(32, win, protoAtom, int(deleteAtom))
-        if err == nil {
-            xproto.SendEvent(w.X.Conn(), false, win, xproto.EventMaskNoEvent, string(cm.Bytes()))
-            return
-        }
+    if w.supportsDeleteProtocol(win) {
+        w.sendDeleteMessage(win)
+    } else {
+        xproto.KillClient(w.X.Conn(), uint32(win))
     }
-    xproto.DestroyWindow(w.X.Conn(), win)
 }
 
 func (w *WM) ToggleFullscreen() {
@@ -234,6 +291,10 @@ func (w *WM) SwitchWorkspace(n int) {
     }
     w.Tile(w.CurWs)
     ewmh.CurrentDesktopSet(w.X, uint(n))
+    ws := w.Workspaces[w.CurWs]
+    if ws.Focused >= 0 && ws.Focused < len(ws.Clients) {
+        w.Focus(ws.Clients[ws.Focused].Win)
+    }
 }
 
 func (w *WM) MoveToWorkspace(n int) {
@@ -252,4 +313,5 @@ func (w *WM) MoveToWorkspace(n int) {
         ws.Focused = len(ws.Clients) - 1
     }
     w.Tile(w.CurWs)
+    w.Tile(n)
 }

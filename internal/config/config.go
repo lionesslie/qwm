@@ -77,7 +77,7 @@ func Default() *Config {
     return &Config{
         General: General{
             ModKey: "Mod4", GapsInner: 10, GapsOuter: 15,
-            BorderWidth: 2, BorderRadius: 12,
+            BorderWidth: 2, BorderRadius: 8,
             BorderActive: "#89b4fa", BorderInactive: "#313244",
             Animations: true, AnimationDurationMs: 180, AnimationFps: 60,
         },
