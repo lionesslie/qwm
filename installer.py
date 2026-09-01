@@ -104,15 +104,54 @@ def install_app_launcher():
         f.write(content)
 
 
+def parse_sections(content):
+    sections = {}
+    current = "__preamble__"
+    sections[current] = []
+    for line in content.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current = stripped
+            sections.setdefault(current, [])
+        sections[current].append(line)
+    return sections
+
+
 def install_config():
     os.makedirs(CONFIG_DIR, exist_ok=True)
     target = os.path.join(CONFIG_DIR, "config.qc")
     source = os.path.join(PROJECT_DIR, "config.qc")
+
     if not os.path.exists(target):
         shutil.copy(source, target)
-        print("Config kopyalandi: " + target)
+        print("Config olusturuldu: " + target)
+        return
+
+    with open(source, "r", encoding="utf-8") as f:
+        template_content = f.read()
+    with open(target, "r", encoding="utf-8") as f:
+        user_content = f.read()
+
+    template_sections = parse_sections(template_content)
+    user_sections = parse_sections(user_content)
+
+    missing_blocks = []
+    for header, lines in template_sections.items():
+        if header == "__preamble__":
+            continue
+        if header not in user_sections:
+            missing_blocks.append("".join(lines))
+
+    if missing_blocks:
+        backup = target + ".bak"
+        shutil.copy(target, backup)
+        with open(target, "a", encoding="utf-8") as f:
+            f.write("\n# --- QWM guncellemesiyle eklenen yeni ayarlar ---\n")
+            for block in missing_blocks:
+                f.write("\n" + block)
+        print("config.qc guncellendi, eksik bolumler eklendi. Yedek: " + backup)
     else:
-        print("Mevcut config.qc korundu.")
+        print("config.qc zaten guncel.")
 
 
 def main():
