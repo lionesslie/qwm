@@ -1,4 +1,4 @@
-﻿package wm
+package wm
 
 func (w *WM) Tile(idx int) {
     ws := w.Workspaces[idx]

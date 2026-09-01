@@ -1,4 +1,4 @@
-﻿package wm
+package wm
 
 import (
     "os"

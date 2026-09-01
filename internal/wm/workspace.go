@@ -1,4 +1,4 @@
-﻿package wm
+package wm
 
 import "github.com/jezek/xgb/xproto"
 

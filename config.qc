@@ -1,4 +1,4 @@
-﻿# QWM Yapilandirma Dosyasi (TOML sozdizimi)
+# QWM Yapilandirma Dosyasi (TOML sozdizimi)
 # Bu dosyayi kaydettiginde QWM otomatik olarak algilar ve
 # tum ayarlari (gap, animasyon, tus atamalari, picom) aninda uygular.
 
