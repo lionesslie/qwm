@@ -1,7 +1,7 @@
 package wm
 
 import (
-    "fmt"
+    "log"
     "os"
     "os/exec"
     "strings"
@@ -52,7 +52,7 @@ func (w *WM) RegisterKeys() {
             fn()
         }).Connect(w.X, w.Root, key, true)
         if err != nil {
-            fmt.Printf("keybind hatasi (%s): %v\n", key, err)
+            log.Printf("keybind hatasi (%s): %v", key, err)
         }
     }
 
@@ -73,6 +73,12 @@ func (w *WM) RegisterKeys() {
     bind(kb.MoveDown, w.MoveNext)
     bind(kb.ScreenshotFull, func() { w.spawn("scrot") })
     bind(kb.LockScreen, func() { w.spawn("i3lock") })
+
+    for _, cb := range w.Cfg.CustomKeybindings {
+        key := cb.Key
+        execCmd := cb.Exec
+        bind(key, func() { w.spawn(execCmd) })
+    }
 
     mod := w.Cfg.General.ModKey
     digits := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"}

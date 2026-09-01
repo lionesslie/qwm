@@ -1,6 +1,6 @@
 # QWM Yapilandirma Dosyasi (TOML sozdizimi)
-# Bu dosyayi kaydettiginde QWM otomatik olarak algilar ve
-# tum ayarlari (gap, animasyon, tus atamalari, picom) aninda uygular.
+# Kaydettiginde otomatik olarak yeniden yuklenir.
+# Super+Sol tik: pencere tasima, Super+Sag tik: pencere boyutlandirma
 
 [general]
 mod_key = "Mod4"
@@ -34,6 +34,19 @@ names = ["1","2","3","4","5","6","7","8","9","10"]
 default = "master_stack"
 master_ratio = 0.55
 
+[monitor]
+output = ""
+resolution = ""
+refresh_rate = 0
+auto_apply = false
+
+[mouse]
+sensitivity = 1.0
+natural_accel = false
+
+[autostart]
+apps = []
+
 [keybindings]
 terminal = "Mod4-Return"
 launcher = "Mod4-d"
@@ -52,3 +65,8 @@ move_up = "Mod4-Shift-k"
 move_down = "Mod4-Shift-j"
 screenshot_full = "Print"
 lock_screen = ""
+
+# Ekstra kisayol eklemek icin ornek (basindaki # isaretini kaldir):
+# [[custom_keybindings]]
+# key = "Mod4-b"
+# exec = "firefox"

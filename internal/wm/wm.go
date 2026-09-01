@@ -17,15 +17,17 @@ import (
 )
 
 type WM struct {
-    X          *xgbutil.XUtil
-    Cfg        *config.Config
-    Root       xproto.Window
-    Workspaces [10]*Workspace
-    CurWs      int
-    ScreenW    int
-    ScreenH    int
-    PicomCmd   *exec.Cmd
-    Focused    xproto.Window
+    X             *xgbutil.XUtil
+    Cfg           *config.Config
+    Root          xproto.Window
+    Workspaces    [10]*Workspace
+    CurWs         int
+    ScreenW       int
+    ScreenH       int
+    PicomCmd      *exec.Cmd
+    Focused       xproto.Window
+    Ignore        map[xproto.Window]int
+    AutostartDone bool
 }
 
 func New() (*WM, error) {
@@ -50,6 +52,7 @@ func New() (*WM, error) {
         Root:    root,
         ScreenW: geo.Width(),
         ScreenH: geo.Height(),
+        Ignore:  map[xproto.Window]int{},
     }
     for i := range w.Workspaces {
         w.Workspaces[i] = &Workspace{Focused: -1}
@@ -77,9 +80,13 @@ func New() (*WM, error) {
 
     w.registerEvents()
     w.RegisterKeys()
+    w.SetupMouseBindings()
+    w.ApplyMonitorSettings()
+    w.ApplyMouseSettings()
     w.StartPicom()
     w.SetWallpaper()
     w.ApplyNvidiaSettings()
+    w.RunAutostart()
     w.WatchConfig()
 
     return w, nil
@@ -95,6 +102,14 @@ func (w *WM) Shutdown() {
     }
 }
 
+func (w *WM) unmapClient(win xproto.Window) {
+    if w.Ignore == nil {
+        w.Ignore = map[xproto.Window]int{}
+    }
+    w.Ignore[win]++
+    xproto.UnmapWindow(w.X.Conn(), win)
+}
+
 func (w *WM) registerEvents() {
     xevent.MapRequestFun(func(X *xgbutil.XUtil, e xevent.MapRequestEvent) {
         w.Manage(e.Window)
@@ -105,6 +120,10 @@ func (w *WM) registerEvents() {
     }).Connect(w.X, w.Root)
 
     xevent.UnmapNotifyFun(func(X *xgbutil.XUtil, e xevent.UnmapNotifyEvent) {
+        if w.Ignore[e.Window] > 0 {
+            w.Ignore[e.Window]--
+            return
+        }
         w.Unmanage(e.Window)
     }).Connect(w.X, w.Root)
 
@@ -165,6 +184,7 @@ func (w *WM) Unmanage(win xproto.Window) {
         for i, c := range ws.Clients {
             if c.Win == win {
                 ws.Clients = append(ws.Clients[:i], ws.Clients[i+1:]...)
+                delete(w.Ignore, win)
                 if len(ws.Clients) == 0 {
                     ws.Focused = -1
                     w.Focused = 0
@@ -283,7 +303,7 @@ func (w *WM) SwitchWorkspace(n int) {
         return
     }
     for _, c := range w.Workspaces[w.CurWs].Clients {
-        xproto.UnmapWindow(w.X.Conn(), c.Win)
+        w.unmapClient(c.Win)
     }
     w.CurWs = n
     for _, c := range w.Workspaces[w.CurWs].Clients {
@@ -307,7 +327,7 @@ func (w *WM) MoveToWorkspace(n int) {
     }
     c := ws.Clients[ws.Focused]
     ws.Clients = append(ws.Clients[:ws.Focused], ws.Clients[ws.Focused+1:]...)
-    xproto.UnmapWindow(w.X.Conn(), c.Win)
+    w.unmapClient(c.Win)
     w.Workspaces[n].Clients = append(w.Workspaces[n].Clients, c)
     if ws.Focused >= len(ws.Clients) {
         ws.Focused = len(ws.Clients) - 1

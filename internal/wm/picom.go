@@ -5,13 +5,33 @@ import (
     "os"
     "os/exec"
     "path/filepath"
+    "sync"
+    "time"
 )
 
+var picomMu sync.Mutex
+
 func (w *WM) StartPicom() {
+    picomMu.Lock()
+    defer picomMu.Unlock()
+
     if w.PicomCmd != nil && w.PicomCmd.Process != nil {
-        w.PicomCmd.Process.Kill()
-        w.PicomCmd.Wait()
+        w.PicomCmd.Process.Signal(os.Interrupt)
+        done := make(chan struct{})
+        go func() {
+            w.PicomCmd.Wait()
+            close(done)
+        }()
+        select {
+        case <-done:
+        case <-time.After(2 * time.Second):
+            w.PicomCmd.Process.Kill()
+            w.PicomCmd.Wait()
+        }
+        w.PicomCmd = nil
+        time.Sleep(300 * time.Millisecond)
     }
+
     if _, err := exec.LookPath("picom"); err != nil {
         return
     }
