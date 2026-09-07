@@ -71,6 +71,7 @@ class WindowManager:
         self.focused_window_id = None
         self.scratchpad_window_id = None
         self._suppress_enter_until = 0.0
+        self._pending_unmaps = {}
         self._running = False
         self._register_handlers()
 
@@ -252,6 +253,7 @@ class WindowManager:
         managed = self.windows.pop(wid, None)
         if not managed:
             return
+        self._pending_unmaps.pop(wid, None)
         ws = self.workspaces.find_workspace_of(wid)
         if ws:
             ws.remove(wid)
@@ -362,17 +364,37 @@ class WindowManager:
     def _on_map_request(self, event):
         self._manage_window(event.window)
 
+    def _wm_unmap(self, managed):
+        self._pending_unmaps[managed.id] = self._pending_unmaps.get(managed.id, 0) + 1
+        try:
+            managed.window.unmap()
+        except error.BadWindow:
+            self._pending_unmaps[managed.id] -= 1
+            if self._pending_unmaps[managed.id] <= 0:
+                del self._pending_unmaps[managed.id]
+
     def _on_unmap_notify(self, event):
-        if event.window.id in self.windows:
-            managed = self.windows[event.window.id]
+        wid = event.window.id
+        if self._pending_unmaps.get(wid, 0) > 0:
+            self._pending_unmaps[wid] -= 1
+            if self._pending_unmaps[wid] <= 0:
+                del self._pending_unmaps[wid]
+            return
+        if wid in self.windows:
+            managed = self.windows[wid]
             if managed.mapped:
-                self._unmanage_window(event.window.id)
+                self._unmanage_window(wid)
 
     def _on_destroy_notify(self, event):
         self._unmanage_window(event.window.id)
 
     def _on_configure_request(self, event):
         managed = self.windows.get(event.window.id)
+
+        if managed and not managed.floating and not managed.fullscreen:
+            self._send_synthetic_configure(managed)
+            return
+
         values = {}
         if event.value_mask & X.CWX:
             values["x"] = event.x
@@ -401,6 +423,23 @@ class WindowManager:
                 managed.geometry.width = values["width"]
             if "height" in values:
                 managed.geometry.height = values["height"]
+
+    def _send_synthetic_configure(self, managed):
+        from Xlib.protocol import event as xevent
+        g = managed.geometry
+        try:
+            notify = xevent.ConfigureNotify(
+                event=managed.window,
+                window=managed.window,
+                above_sibling=X.NONE,
+                x=g.x, y=g.y, width=g.width, height=g.height,
+                border_width=managed.border_width,
+                override=False,
+            )
+            managed.window.send_event(notify, event_mask=X.StructureNotifyMask)
+            self.display.flush()
+        except error.BadWindow:
+            pass
 
     def _on_enter_notify(self, event):
         if not self.config["general"].get("focus_follows_mouse", True):
@@ -604,7 +643,7 @@ class WindowManager:
             managed = self.windows[self.scratchpad_window_id]
             managed.hidden = not managed.hidden
             if managed.hidden:
-                managed.window.unmap()
+                self._wm_unmap(managed)
             else:
                 managed.window.map()
                 self.focus_window(managed.id)
@@ -627,20 +666,18 @@ class WindowManager:
         prev_idx, new_idx = result
         for wid in self.workspaces.get(prev_idx).window_ids:
             managed = self.windows.get(wid)
-            if managed and not managed.floating:
-                try:
-                    managed.window.unmap()
-                except error.BadWindow:
-                    pass
+            if managed and not managed.hidden:
+                self._wm_unmap(managed)
         self._relayout(new_idx)
         for wid in self.workspaces.get(new_idx).window_ids:
             managed = self.windows.get(wid)
-            if managed:
+            if managed and not managed.hidden:
                 try:
                     managed.window.map()
                 except error.BadWindow:
                     pass
         self.ewmh.set_current_desktop(new_idx)
+        self.display.flush()
 
     def move_focused_to_workspace(self, index):
         if not self.focused_window_id:
@@ -654,11 +691,9 @@ class WindowManager:
         self.workspaces.move_window(wid, from_ws, to_ws)
         managed.workspace = index
         self.ewmh.set_wm_desktop(managed.window, index)
-        try:
-            managed.window.unmap()
-        except error.BadWindow:
-            pass
+        self._wm_unmap(managed)
         self._relayout(from_ws.index)
+        self.display.flush()
 
     def reload_config(self):
         from qwm.config.loader import load_config
@@ -690,12 +725,13 @@ class WindowManager:
 
         self._relayout(self.workspaces.current_index)
         logger.info("config yeniden yuklendi")
+        self.display.flush()
 
     def _event_loop(self):
         fd = self.display.fileno()
         while self._running:
             try:
-                readable, _, _ = select.select([fd], [], [], 0.05)
+                readable, _, _ = select.select([fd], [], [], 0.01)
             except (OSError, ValueError):
                 break
 
@@ -712,8 +748,15 @@ class WindowManager:
                         logger.exception("event isleme hatasi: %s", event)
 
             self._drain_commands()
+            self._flush_display()
 
         self.stop()
+
+    def _flush_display(self):
+        try:
+            self.display.flush()
+        except Exception:
+            logger.exception("display flush hatasi")
 
     def _drain_commands(self):
         while True:
