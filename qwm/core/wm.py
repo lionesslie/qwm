@@ -16,9 +16,11 @@ from .window import ManagedWindow, Geometry
 from .workspace import WorkspaceManager, Monitor
 from .layout import apply_layout
 from .events import EventDispatcher
+from . import screen as screen_module
 
 from qwm.input.keybinds import KeybindManager
-from qwm.input.mouse import MouseController, BUTTON_LEFT, BUTTON_MIDDLE, BUTTON_RIGHT
+from qwm.input.mouse import MouseController, BUTTON_LEFT, BUTTON_MIDDLE, BUTTON_RIGHT, apply_mouse_config
+from qwm.input.keyboard import apply_keyboard_config
 from qwm.render.animator import AnimationScheduler, Animation
 from qwm.render.compositor import CompositorManager
 from qwm.render.decorations import DecorationConfig
@@ -112,6 +114,9 @@ class WindowManager:
         self.keybinds.grab_all(self.config["keybinds"])
         self.mouse.grab_buttons()
 
+        apply_keyboard_config(self.config["keyboard"])
+        apply_mouse_config(self.config["mouse"])
+
         self.compositor.generate_config(self.config["compositor"], self.config["animations"])
         if self.config["compositor"].get("enabled", True):
             self.compositor.start()
@@ -135,6 +140,11 @@ class WindowManager:
         self.display.close()
 
     def _detect_monitors(self):
+        monitors_cfg = self.config.get("monitors", [])
+        if monitors_cfg:
+            screen_module.apply_monitor_config(monitors_cfg)
+            self.display.sync()
+
         monitors = []
         try:
             resources = self.root.xrandr_get_screen_resources()
@@ -662,6 +672,10 @@ class WindowManager:
         self.decorations = DecorationConfig.from_config(new_config["general"], new_config["colors"])
         self.keybinds.grab_all(new_config["keybinds"])
         self.animator_enabled["enabled"] = new_config["animations"].get("enabled", True)
+
+        apply_keyboard_config(new_config["keyboard"])
+        apply_mouse_config(new_config["mouse"])
+        self._detect_monitors()
 
         self.compositor.generate_config(new_config["compositor"], new_config["animations"])
         self.compositor.reload()

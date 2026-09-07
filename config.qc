@@ -51,7 +51,45 @@ wallpaper_path = "~/.config/qwm/wallpaper.jpg"
 count = 9
 names = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
+[mouse]
+accel_profile = "adaptive"
+accel_speed = 0.0
+natural_scroll = false
+left_handed = false
+scroll_speed = 1.0
+cursor_theme = "default"
+cursor_size = 24
+
+[keyboard]
+layout = "tr"
+variant = ""
+model = "pc105"
+options = ""
+repeat_delay_ms = 300
+repeat_rate = 30
+numlock_on_start = true
+
+[system_autologin]
+enabled = false
+method = "display_manager"
+target_user = ""
+tty = 1
+
 [autostart]
+
+[[monitors]]
+name = "eDP-1"
+resolution = "1920x1080"
+refresh_rate = 60
+position = "0x0"
+primary = true
+
+# [[monitors]]
+# name = "HDMI-1"
+# resolution = "1920x1080"
+# refresh_rate = 144
+# position = "1920x0"
+# primary = false
 
 [[rules]]
 class = "Rofi"

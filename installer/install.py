@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import argparse
 import tempfile
+import glob
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import packages
@@ -303,6 +304,145 @@ def write_xsession_file(summary):
     summary.ok(f"{XSESSION_PATH} olusturuldu")
 
 
+def resolve_target_user(cfg_user):
+    if cfg_user:
+        return cfg_user
+    sudo_user = os.environ.get("SUDO_USER")
+    if sudo_user and sudo_user != "root":
+        return sudo_user
+    return os.environ.get("USER", "root")
+
+
+def setup_autologin_gdm(user, summary):
+    for path in ("/etc/gdm3/custom.conf", "/etc/gdm/custom.conf"):
+        if os.path.exists(os.path.dirname(path)):
+            lines = []
+            if os.path.exists(path):
+                with open(path) as f:
+                    lines = f.readlines()
+            lines = [l for l in lines if not l.strip().startswith(("AutomaticLoginEnable", "AutomaticLogin="))]
+            if "[daemon]" not in "".join(lines):
+                lines.append("[daemon]\n")
+            out = []
+            in_daemon = False
+            for line in lines:
+                out.append(line)
+                if line.strip() == "[daemon]":
+                    in_daemon = True
+                    out.append("AutomaticLoginEnable=True\n")
+                    out.append(f"AutomaticLogin={user}\n")
+            with open(path, "w") as f:
+                f.writelines(out)
+            summary.ok(f"GDM autologin ayarlandi: {path}")
+            return True
+    summary.warn("GDM config dizini bulunamadi, autologin ayarlanamadi")
+    return False
+
+
+def setup_autologin_sddm(user, summary):
+    conf_dir = "/etc/sddm.conf.d"
+    os.makedirs(conf_dir, exist_ok=True)
+    path = os.path.join(conf_dir, "qwm-autologin.conf")
+    with open(path, "w") as f:
+        f.write(f"[Autologin]\nUser={user}\nSession=qwm.desktop\n")
+    summary.ok(f"SDDM autologin ayarlandi: {path}")
+    return True
+
+
+def setup_autologin_lightdm(user, summary):
+    conf_dir = "/etc/lightdm/lightdm.conf.d"
+    if not os.path.exists("/etc/lightdm"):
+        summary.warn("lightdm config dizini bulunamadi")
+        return False
+    os.makedirs(conf_dir, exist_ok=True)
+    path = os.path.join(conf_dir, "50-qwm-autologin.conf")
+    with open(path, "w") as f:
+        f.write(f"[Seat:*]\nautologin-user={user}\nautologin-session=qwm\n")
+    summary.ok(f"LightDM autologin ayarlandi: {path}")
+    return True
+
+
+def setup_autologin_tty(user, tty, summary):
+    override_dir = f"/etc/systemd/system/getty@tty{tty}.service.d"
+    os.makedirs(override_dir, exist_ok=True)
+    override_path = os.path.join(override_dir, "autologin.conf")
+    with open(override_path, "w") as f:
+        f.write(
+            "[Service]\n"
+            "ExecStart=\n"
+            f"ExecStart=-/sbin/agetty --autologin {user} --noclear %I $TERM\n"
+        )
+    summary.ok(f"tty{tty} autologin ayarlandi: {override_path}")
+
+    profile_path = os.path.expanduser(f"~{user}/.bash_profile")
+    snippet = (
+        "\nif [ -z \"$DISPLAY\" ] && [ \"$(tty)\" = \"/dev/tty%s\" ]; then\n"
+        "    exec startx\n"
+        "fi\n" % tty
+    )
+    try:
+        existing = ""
+        if os.path.exists(profile_path):
+            with open(profile_path) as f:
+                existing = f.read()
+        if "exec startx" not in existing:
+            with open(profile_path, "a") as f:
+                f.write(snippet)
+            summary.ok(f".bash_profile guncellendi: {profile_path}")
+        else:
+            summary.skip(".bash_profile zaten startx cagrisi iceriyor")
+    except OSError:
+        summary.warn(f"{profile_path} yazilamadi, kullanici home dizinini kontrol edin")
+
+    xinitrc_path = os.path.expanduser(f"~{user}/.xinitrc")
+    if not os.path.exists(xinitrc_path):
+        with open(xinitrc_path, "w") as f:
+            f.write("#!/bin/sh\nexec /usr/bin/qwm-start\n")
+        os.chmod(xinitrc_path, 0o755)
+        summary.ok(f".xinitrc olusturuldu: {xinitrc_path}")
+    else:
+        summary.skip(".xinitrc zaten var, degistirilmedi")
+
+    try:
+        run(["systemctl", "daemon-reload"], summary=summary, check=False,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+    return True
+
+
+def setup_system_autologin(cfg, summary):
+    if not require_root():
+        summary.warn("root yetkisi yok, sistem autologin ayarlanamadi")
+        return
+
+    user = resolve_target_user(cfg.get("target_user", ""))
+    method = cfg.get("method", "display_manager")
+
+    if method == "tty":
+        setup_autologin_tty(user, cfg.get("tty", 1), summary)
+        return
+
+    dm_name, service = packages.detect_display_manager()
+    if not dm_name:
+        summary.warn("desteklenen bir display manager bulunamadi, tty yontemine dusuluyor")
+        setup_autologin_tty(user, cfg.get("tty", 1), summary)
+        return
+
+    if dm_name == "gdm":
+        setup_autologin_gdm(user, summary)
+    elif dm_name == "sddm":
+        setup_autologin_sddm(user, summary)
+    elif dm_name == "lightdm":
+        setup_autologin_lightdm(user, summary)
+
+    try:
+        run(["systemctl", "enable", service], summary=summary, check=False,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
 def generate_companion_configs(summary):
     colors_path = os.path.join(CONFIG_DIR, "config.qc")
     active = "#89b4fa"
@@ -340,6 +480,34 @@ opacity = 0.95
         summary.skip("~/.config/alacritty/alacritty.toml zaten var")
 
 
+def cleanup_autologin(summary):
+    candidates = [
+        "/etc/sddm.conf.d/qwm-autologin.conf",
+        "/etc/lightdm/lightdm.conf.d/50-qwm-autologin.conf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            os.remove(path)
+            summary.ok(f"{path} kaldirildi")
+
+    for tty_conf in glob.glob("/etc/systemd/system/getty@tty*.service.d/autologin.conf"):
+        os.remove(tty_conf)
+        parent = os.path.dirname(tty_conf)
+        if not os.listdir(parent):
+            os.rmdir(parent)
+        summary.ok(f"{tty_conf} kaldirildi")
+
+    for gdm_path in ("/etc/gdm3/custom.conf", "/etc/gdm/custom.conf"):
+        if os.path.exists(gdm_path):
+            with open(gdm_path) as f:
+                lines = f.readlines()
+            new_lines = [l for l in lines if not l.strip().startswith(("AutomaticLoginEnable", "AutomaticLogin="))]
+            if new_lines != lines:
+                with open(gdm_path, "w") as f:
+                    f.writelines(new_lines)
+                summary.ok(f"{gdm_path} icindeki qwm autologin satirlari kaldirildi")
+
+
 def uninstall(summary):
     if require_root():
         for path in (XSESSION_PATH, QWM_START_PATH, QWMCTL_PATH):
@@ -349,6 +517,7 @@ def uninstall(summary):
         if os.path.exists(INSTALL_PREFIX):
             shutil.rmtree(INSTALL_PREFIX)
             summary.ok(f"{INSTALL_PREFIX} kaldirildi")
+        cleanup_autologin(summary)
     else:
         summary.warn("root yetkisi yok, sistem geneli dosyalar kaldirilamadi")
 
@@ -388,6 +557,17 @@ def main():
     write_qwmctl_symlink(summary)
     write_xsession_file(summary)
     generate_companion_configs(summary)
+
+    try:
+        sys.path.insert(0, INSTALL_PREFIX)
+        from qwm.config.loader import load_config
+        final_config, _ = load_config(os.path.join(CONFIG_DIR, "config.qc"))
+        if final_config.get("system_autologin", {}).get("enabled"):
+            setup_system_autologin(final_config["system_autologin"], summary)
+        else:
+            summary.info("system_autologin.enabled = false, otomatik giris atlandi")
+    except Exception:
+        summary.warn("config okunamadigindan system_autologin uygulanamadi")
 
     summary.print_report()
     return 0

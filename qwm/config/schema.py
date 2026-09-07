@@ -62,6 +62,31 @@ DEFAULTS = {
     },
     "autostart": {},
     "rules": [],
+    "monitors": [],
+    "mouse": {
+        "accel_profile": "adaptive",
+        "accel_speed": 0.0,
+        "natural_scroll": False,
+        "left_handed": False,
+        "scroll_speed": 1.0,
+        "cursor_theme": "default",
+        "cursor_size": 24,
+    },
+    "keyboard": {
+        "layout": "us",
+        "variant": "",
+        "model": "pc105",
+        "options": "",
+        "repeat_delay_ms": 300,
+        "repeat_rate": 30,
+        "numlock_on_start": False,
+    },
+    "system_autologin": {
+        "enabled": False,
+        "method": "display_manager",
+        "target_user": "",
+        "tty": 1,
+    },
     "keybinds": {
         "terminal": "super+return",
         "launcher": "super+d",
@@ -115,8 +140,14 @@ _TYPE_MAP = {
     "blur": bool, "shadow": bool, "glx_no_stencil": bool, "glx_no_rebind_pixmap": bool,
     "auto_optimize": bool, "force_composition_pipeline": bool, "triple_buffer": bool,
     "auto_detect": bool, "unredirect_fullscreen": bool, "disable_animations_on_game": bool,
-    "workspace_slide": bool,
+    "workspace_slide": bool, "accel_speed": float, "natural_scroll": bool,
+    "left_handed": bool, "scroll_speed": float, "cursor_size": int,
+    "repeat_delay_ms": int, "repeat_rate": int, "numlock_on_start": bool,
+    "tty": int,
 }
+
+VALID_ACCEL_PROFILES = {"adaptive", "flat"}
+VALID_AUTOLOGIN_METHODS = {"display_manager", "tty"}
 
 
 def _merge_section(defaults, user, section_name):
@@ -174,6 +205,26 @@ def validate_and_merge(user_config):
         if not isinstance(rules, list):
             raise ConfigError("[[rules]] bir dizi tablo olmalı")
         result["rules"] = rules
+
+    if "monitors" in user_config:
+        monitors = user_config["monitors"]
+        if not isinstance(monitors, list):
+            raise ConfigError("[[monitors]] bir dizi tablo olmalı")
+        for entry in monitors:
+            if not isinstance(entry, dict) or "name" not in entry:
+                raise ConfigError("her [[monitors]] girdisi 'name' alanı icermeli")
+        result["monitors"] = monitors
+
+    accel_profile = result["mouse"].get("accel_profile")
+    if accel_profile not in VALID_ACCEL_PROFILES:
+        raise ConfigError(f"gecersiz mouse.accel_profile: {accel_profile!r}, gecerli degerler: {sorted(VALID_ACCEL_PROFILES)}")
+    accel_speed = result["mouse"].get("accel_speed")
+    if not (-1.0 <= float(accel_speed) <= 1.0):
+        raise ConfigError("mouse.accel_speed -1.0 ile 1.0 arasinda olmali")
+
+    autologin_method = result["system_autologin"].get("method")
+    if autologin_method not in VALID_AUTOLOGIN_METHODS:
+        raise ConfigError(f"gecersiz system_autologin.method: {autologin_method!r}, gecerli degerler: {sorted(VALID_AUTOLOGIN_METHODS)}")
 
     if "autostart" in user_config:
         result["autostart"] = user_config["autostart"]

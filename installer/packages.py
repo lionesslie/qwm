@@ -165,6 +165,21 @@ def is_installed(binary_name):
     return shutil.which(binary_name) is not None
 
 
+def detect_display_manager():
+    candidates = {
+        "gdm": ["gdm3", "gdm"],
+        "sddm": ["sddm"],
+        "lightdm": ["lightdm"],
+    }
+    for dm_name, services in candidates.items():
+        for service in services:
+            unit_path = f"/lib/systemd/system/{service}.service"
+            alt_path = f"/usr/lib/systemd/system/{service}.service"
+            if os.path.exists(unit_path) or os.path.exists(alt_path):
+                return dm_name, service
+    return None, None
+
+
 def detect_nvidia_driver():
     if shutil.which("nvidia-smi"):
         try:
