@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=QWM
+Comment=Python Tiling Window Manager for X11
+Exec=/usr/bin/qwm-start
+Type=Application
+DesktopNames=QWM

@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+import sys
+import os
+import argparse
+import json
+
+sys.path.insert(0, "/opt/qwm")
+
+from qwm.ipc.socket_server import send_command, DEFAULT_SOCKET_PATH
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="qwmctl", description="QWM icin kontrol araci")
+    parser.add_argument("--socket", default=DEFAULT_SOCKET_PATH)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("reload", help="config.qc dosyasini yeniden yukle")
+    sub.add_parser("restart", help="qwm surecini yeniden baslat")
+    sub.add_parser("kill-focused", help="odaklanmis pencereyi kapat")
+
+    ws_parser = sub.add_parser("workspace", help="belirtilen workspace'e gec")
+    ws_parser.add_argument("index", type=int)
+
+    layout_parser = sub.add_parser("layout", help="aktif workspace'in layout'unu degistir")
+    layout_parser.add_argument("name", choices=["master_stack", "grid", "spiral", "monocle", "floating"])
+
+    args = parser.parse_args()
+
+    cmd_args = []
+    if args.command == "workspace":
+        cmd_args = [str(args.index)]
+    elif args.command == "layout":
+        cmd_args = [args.name]
+
+    try:
+        response = send_command(args.command, cmd_args, socket_path=args.socket)
+    except FileNotFoundError:
+        print("HATA: qwm calisir durumda degil (socket bulunamadi)", file=sys.stderr)
+        return 1
+    except ConnectionRefusedError:
+        print("HATA: qwm ipc soketine baglanilamadi", file=sys.stderr)
+        return 1
+
+    print(json.dumps(response))
+    return 0 if response.get("status") == "ok" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
