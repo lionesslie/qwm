@@ -128,6 +128,7 @@ class WindowManager:
         self._apply_wallpaper()
         self._run_autostart()
         self._adopt_existing_windows()
+        self._focus_window_under_pointer()
 
         self._running = True
         logger.info("qwm baslatildi (%d workspace)", len(self.workspaces.workspaces))
@@ -183,7 +184,8 @@ class WindowManager:
             if not cmd:
                 continue
             try:
-                subprocess.Popen(shlex.split(cmd))
+                args = [os.path.expanduser(part) for part in shlex.split(cmd)]
+                subprocess.Popen(args)
             except Exception:
                 logger.exception("autostart komutu basarisiz: %s", cmd)
 
@@ -372,6 +374,18 @@ class WindowManager:
             self._pending_unmaps[managed.id] -= 1
             if self._pending_unmaps[managed.id] <= 0:
                 del self._pending_unmaps[managed.id]
+
+    def _focus_window_under_pointer(self):
+        if not self.config["general"].get("focus_follows_mouse", True):
+            return
+        try:
+            pointer = self.root.query_pointer()
+        except error.BadWindow:
+            return
+        child = pointer.child
+        child_id = child.id if hasattr(child, "id") else child
+        if child_id and child_id in self.windows:
+            self.focus_window(child_id)
 
     def _on_unmap_notify(self, event):
         wid = event.window.id
@@ -652,7 +666,8 @@ class WindowManager:
 
     def _spawn(self, command):
         try:
-            subprocess.Popen(shlex.split(command))
+            args = [os.path.expanduser(part) for part in shlex.split(command)]
+            subprocess.Popen(args)
             return True
         except FileNotFoundError:
             logger.warning("komut bulunamadi: %s", command)
@@ -678,6 +693,7 @@ class WindowManager:
                     pass
         self.ewmh.set_current_desktop(new_idx)
         self.display.flush()
+        self._focus_window_under_pointer()
 
     def move_focused_to_workspace(self, index):
         if not self.focused_window_id:
@@ -775,6 +791,8 @@ class WindowManager:
         if name == "reload":
             self.reload_config()
         elif name == "restart":
+            self._running = False
+        elif name == "quit":
             self._running = False
         elif name == "kill-focused":
             self.action_close_window()

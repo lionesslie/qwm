@@ -76,6 +76,7 @@ target_user = ""
 tty = 1
 
 [autostart]
+polybar = "~/.config/polybar/launch.sh"
 
 [[monitors]]
 name = "eDP-1"

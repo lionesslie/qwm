@@ -248,6 +248,35 @@ def copy_qwm_package(summary):
     return True
 
 
+def deploy_bundled_configs(summary):
+    bundle_root = os.path.join(REPO_ROOT, "configs")
+    if not os.path.isdir(bundle_root):
+        return
+
+    home_config = os.path.expanduser("~/.config")
+    copied, skipped = 0, 0
+
+    for dirpath, _, filenames in os.walk(bundle_root):
+        rel_dir = os.path.relpath(dirpath, bundle_root)
+        dest_dir = home_config if rel_dir == "." else os.path.join(home_config, rel_dir)
+        os.makedirs(dest_dir, exist_ok=True)
+        for filename in filenames:
+            src = os.path.join(dirpath, filename)
+            dst = os.path.join(dest_dir, filename)
+            if os.path.exists(dst):
+                skipped += 1
+                continue
+            shutil.copy(src, dst)
+            if filename.endswith(".sh"):
+                os.chmod(dst, 0o755)
+            copied += 1
+
+    if copied:
+        summary.ok(f"configs/ paketi ~/.config icine kopyalandi ({copied} dosya)")
+    if skipped:
+        summary.skip(f"configs/ icindeki {skipped} dosya zaten mevcut oldugu icin atlandi")
+
+
 def setup_user_config(summary):
     os.makedirs(CONFIG_DIR, exist_ok=True)
     target = os.path.join(CONFIG_DIR, "config.qc")
@@ -553,6 +582,7 @@ def main():
     install_python_dependencies(summary)
     copy_qwm_package(summary)
     setup_user_config(summary)
+    deploy_bundled_configs(summary)
     write_qwm_start_script(summary)
     write_qwmctl_symlink(summary)
     write_xsession_file(summary)

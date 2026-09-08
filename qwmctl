@@ -16,6 +16,7 @@ def main():
 
     sub.add_parser("reload", help="config.qc dosyasini yeniden yukle")
     sub.add_parser("restart", help="qwm surecini yeniden baslat")
+    sub.add_parser("quit", help="qwm oturumunu tamamen kapat")
     sub.add_parser("kill-focused", help="odaklanmis pencereyi kapat")
 
     ws_parser = sub.add_parser("workspace", help="belirtilen workspace'e gec")

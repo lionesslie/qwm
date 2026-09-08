@@ -13,9 +13,12 @@ Python 3.11+ ile yazılmış, python-xlib üzerine kurulu, NVIDIA ekran kartlar�
 - NVIDIA GPU tespiti ve optimizasyon (force composition pipeline, PRIME offload)
 - Game mode: fullscreen tespitinde compositor bypass, animasyon kapatma, CPU governor
 - Çoklu monitör desteği (Xrandr)
-- Unix socket üzerinden `qwmctl` CLI kontrolü
-- Opsiyonel minimal status bar
+- Unix socket üzerinden `qwmctl` CLI kontrolü (`reload`, `restart`, `quit`, `kill-focused`, `workspace`, `layout`)
+- Opsiyonel minimal status bar (dahili) veya polybar entegrasyonu (`configs/polybar`)
 - Crash recovery (otomatik yeniden başlatma)
+- Ekran (xrandr), fare (libinput/xinput) ve klavye (setxkbmap) ayarları `config.qc` üzerinden
+- Sistem açılışında otomatik giriş (GDM/SDDM/LightDM autologin veya TTY autologin)
+- `configs/` klasörü: picom, rofi (catppuccin teması) ve polybar için hazır yapılandırmalar; kurulumda otomatik olarak `~/.config` altına kopyalanır
 
 ## Kurulum
 
@@ -36,7 +39,13 @@ Kurulum betiği:
 7. `/usr/share/xsessions/qwm.desktop` dosyasını oluşturarak GDM/SDDM/LightDM'de
    "QWM" oturumunu seçilebilir hale getirir
 8. `/usr/bin/qwm-start` başlatma betiğini ve `/usr/local/bin/qwmctl` CLI aracını kurar
-9. rofi teması ve alacritty renk paletini qwm ile senkronize eder
+9. `configs/` altındaki picom, rofi ve polybar yapılandırmalarını `~/.config` içine kopyalar
+   (zaten var olan dosyaların üzerine yazmaz)
+10. rofi teması ve alacritty renk paletini qwm ile senkronize eder
+
+Not: `~/.config/picom/picom.conf` mevcutsa (örn. `configs/picom` kopyalandıktan sonra),
+qwm kendi otomatik ürettiği picom.conf yerine bu dosyayı kullanır. Dosya yoksa
+`config.qc`'nin `[compositor]` bölümünden otomatik üretime devam eder.
 
 Root gerektirmeyen sadece kullanıcı dizinine yapılan adımlar (config kopyalama vb.)
 sudo olmadan da çalışır; sistem paketleri ve `/opt`, `/usr` altındaki dosyalar için
@@ -118,6 +127,7 @@ workspace = 3
 ```bash
 qwmctl reload            # config.qc'yi yeniden yükle
 qwmctl restart           # qwm sürecini yeniden başlat
+qwmctl quit               # qwm oturumunu tamamen kapat
 qwmctl kill-focused      # odaklı pencereyi kapat
 qwmctl workspace 3       # 3. workspace'e geç
 qwmctl layout grid       # aktif workspace'in layout'unu değiştir

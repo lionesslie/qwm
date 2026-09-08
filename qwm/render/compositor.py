@@ -75,6 +75,7 @@ class CompositorManager:
     def __init__(self, config_dir):
         self.config_dir = config_dir
         self.config_path = os.path.join(config_dir, "picom.conf")
+        self.user_config_path = os.path.expanduser("~/.config/picom/picom.conf")
         self.process = None
         self.binary = self._find_binary()
 
@@ -86,6 +87,12 @@ class CompositorManager:
         return None
 
     def generate_config(self, compositor_cfg, animations_cfg, unredirect_fullscreen=False):
+        if os.path.exists(self.user_config_path):
+            self.config_path = self.user_config_path
+            logger.info("kullanicinin kendi picom.conf dosyasi kullaniliyor: %s", self.user_config_path)
+            return self.config_path
+
+        self.config_path = os.path.join(self.config_dir, "picom.conf")
         os.makedirs(self.config_dir, exist_ok=True)
         content = CONFIG_TEMPLATE.format(
             backend=compositor_cfg.get("backend", "glx"),
