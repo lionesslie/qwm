@@ -7,7 +7,7 @@ Python 3.11+ ile yazılmış, python-xlib üzerine kurulu, NVIDIA ekran kartlar�
 
 - Layout modları: `master_stack`, `grid`, `spiral`, `monocle`, `floating`
 - EWMH/ICCCM desteği (rofi, taskbar gibi araçlarla uyumlu)
-- `config.qc` (TOML sözdizimi) ile canlı (hot-reload) yapılandırma
+- `config.qc` ile canlı yapılandırma
 - picom entegrasyonu: rounded corners, blur, shadow, animasyonlar
 - WM taraflı ease-out-cubic animasyonlu pencere taşıma/boyutlandırma
 - NVIDIA GPU tespiti ve optimizasyon (force composition pipeline, PRIME offload)
