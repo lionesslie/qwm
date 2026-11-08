@@ -1,0 +1,168 @@
+# ~/.config/qwm/qwm.toml
+# qwm icin ornek/varsayilan yapilandirma. Tanimlanmayan her alan,
+# qwm-core/src/config/schema.rs icindeki Default implementasyonlarindan
+# gelir; yani bu dosyada yalnizca degistirmek istediginiz alanlari
+# tutmaniz yeterlidir.
+
+[general]
+split_ratio = 0.5
+auto_split_direction = "auto"
+focus_follows_mouse = false
+click_to_focus = true
+new_window_takes_focus = true
+default_layout = "bsp"
+
+[gaps]
+inner = 8
+outer_top = 12
+outer_bottom = 12
+outer_left = 12
+outer_right = 12
+smart_gaps = true
+
+[border]
+width = 2
+focused_color = "#89b4fa"
+unfocused_color = "#45475a"
+urgent_color = "#f38ba8"
+radius = 0
+
+[workspaces]
+mode = "dynamic"
+static_count = 10
+names = ["web", "code", "term", "chat", "media"]
+
+[monitors]
+on_connect = "assign_new_workspace"
+on_disconnect = "merge"
+
+[input]
+mod_key = "Super"
+keybinding_style = "custom"
+
+[[keybind]]
+keys = "Mod+Return"
+action = "spawn"
+command = "alacritty"
+
+[[keybind]]
+keys = "Mod+d"
+action = "spawn"
+command = "rofi -show drun"
+
+[[keybind]]
+keys = "Mod+q"
+action = "node_close"
+
+[[keybind]]
+keys = "Mod+h"
+action = "focus"
+direction = "west"
+
+[[keybind]]
+keys = "Mod+l"
+action = "focus"
+direction = "east"
+
+[[keybind]]
+keys = "Mod+j"
+action = "focus"
+direction = "south"
+
+[[keybind]]
+keys = "Mod+k"
+action = "focus"
+direction = "north"
+
+[[keybind]]
+keys = "Mod+Shift+h"
+action = "node_swap"
+direction = "west"
+
+[[keybind]]
+keys = "Mod+1"
+action = "workspace_switch"
+target = 1
+
+[[keybind]]
+keys = "Mod+Shift+1"
+action = "node_to_workspace"
+target = 1
+
+[[keybind]]
+keys = "Mod+f"
+action = "toggle_floating"
+
+[[keybind]]
+keys = "Mod+m"
+action = "toggle_monocle"
+
+[[keybind]]
+keys = "Mod+grave"
+action = "scratchpad_toggle"
+name = "terminal"
+
+[[keybind]]
+keys = "Mod+Shift+r"
+action = "reload_config"
+
+[[keybind]]
+keys = "Mod+Shift+q"
+action = "quit"
+
+[[rule]]
+class = "^Pavucontrol$"
+floating = true
+width = 600
+height = 400
+center = true
+
+[[rule]]
+class = "^mpv$"
+floating = true
+sticky = true
+
+[[rule]]
+title = "^Picture-in-Picture$"
+floating = true
+always_on_top = true
+
+[[rule]]
+class = "^Spotify$"
+workspace = "media"
+
+[[scratchpad]]
+name = "terminal"
+command = "alacritty --class scratchterm"
+match_class = "scratchterm"
+width = 0.6
+height = 0.5
+center = true
+
+[autostart]
+commands = [
+    "picom --config ~/.config/picom.conf",
+    "nitrogen --restore",
+    "dunst",
+]
+
+[bar]
+enabled = false
+position = "top"
+height = 24
+font = "JetBrainsMono Nerd Font 10"
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+show_workspaces = true
+show_window_title = true
+modules_right = ["clock", "battery"]
+
+[external_bar]
+enabled = true
+
+[ipc]
+socket_path = "/tmp/qwm.sock"
+
+[log]
+level = "info"
+file = "~/.local/share/qwm/qwm.log"

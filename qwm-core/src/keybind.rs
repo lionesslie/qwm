@@ -1,0 +1,108 @@
+//! Keybinding string parse'ı ve `Action` enum'u.
+//!
+//! `Action`, hem WM içi keybinding'lerin hem de `qwmctl`'den gelen IPC
+//! komutlarının ortak temsilidir (spesifikasyon bölüm 8: "keybinding'ler
+//! aslında dahili olarak qwmctl ile aynı IPC komutlarını tetikler").
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Modifiers {
+    /// Config'deki `input.mod_key` (genelde Super/Win tuşu).
+    pub mod_mask: bool,
+    pub shift: bool,
+    pub ctrl: bool,
+    pub alt: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedKeybind {
+    pub mods: Modifiers,
+    pub keysym: u32,
+}
+
+/// `"Mod+Shift+h"` gibi bir string'i modifier'lara ve X11 keysym değerine
+/// ayırır. Şimdilik yalnızca ASCII harf/rakamlar ve birkaç yaygın özel
+/// tuş (`Return`, `grave`, `space`, `Tab`, `Escape`) destekleniyor; daha
+/// eksiksiz bir tablo için ileride `xkbcommon` entegrasyonu düşünülebilir.
+pub fn parse_keys(spec: &str) -> Option<ParsedKeybind> {
+    let parts: Vec<&str> = spec.split('+').collect();
+    if parts.is_empty() {
+        return None;
+    }
+    let (modifiers, key) = parts.split_at(parts.len() - 1);
+    let key = key.first()?;
+
+    let mut mods = Modifiers::default();
+    for m in modifiers {
+        match *m {
+            "Mod" | "Super" => mods.mod_mask = true,
+            "Shift" => mods.shift = true,
+            "Ctrl" | "Control" => mods.ctrl = true,
+            "Alt" => mods.alt = true,
+            _ => {}
+        }
+    }
+
+    keysym_for(key).map(|keysym| ParsedKeybind { mods, keysym })
+}
+
+fn keysym_for(name: &str) -> Option<u32> {
+    if name.chars().count() == 1 {
+        let c = name.chars().next().unwrap();
+        if c.is_ascii_alphanumeric() {
+            // ASCII harf/rakam keysym'leri karakter koduyla birebir aynıdır.
+            return Some(c.to_ascii_lowercase() as u32);
+        }
+    }
+    let sym = match name {
+        "Return" => 0xff0d,
+        "grave" => 0x0060,
+        "space" => 0x0020,
+        "Tab" => 0xff09,
+        "Escape" => 0xff1b,
+        _ => return None,
+    };
+    Some(sym)
+}
+
+/// WM'in anladığı tüm aksiyonlar. `qwmctl` bu enum'u JSON olarak
+/// serileştirip IPC socket'ine gönderir (bkz. `ipc::protocol`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "cmd", content = "args", rename_all = "snake_case")]
+pub enum Action {
+    Spawn { command: String },
+    NodeClose,
+    Focus { direction: String },
+    NodeSwap { direction: String },
+    NodeResize { direction: String, amount: i32 },
+    WorkspaceSwitch { target: String },
+    NodeToWorkspace { target: String },
+    ToggleFloating,
+    ToggleMonocle,
+    ToggleFullscreen,
+    ScratchpadToggle { name: String },
+    ReloadConfig,
+    Quit,
+    Query { windows: bool },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_modifiers_and_key() {
+        let parsed = parse_keys("Mod+Shift+h").unwrap();
+        assert!(parsed.mods.mod_mask);
+        assert!(parsed.mods.shift);
+        assert!(!parsed.mods.ctrl);
+        assert_eq!(parsed.keysym, 'h' as u32);
+    }
+
+    #[test]
+    fn parses_named_key() {
+        let parsed = parse_keys("Mod+Return").unwrap();
+        assert_eq!(parsed.keysym, 0xff0d);
+    }
+}

@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=qwm
+Comment=Rust tabanli BSP tiling window manager
+Exec=qwm
+Type=Application

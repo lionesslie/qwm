@@ -1,0 +1,13 @@
+[package]
+name = "qwmctl"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "qwmctl"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
