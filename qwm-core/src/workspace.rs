@@ -1,8 +1,8 @@
 use crate::layout::bsp_tree::BspTree;
 
-/// Tek bir monitördeki tek bir workspace. `mode = "dynamic"` olduğunda
-/// WM, `is_empty()` true dönen workspace'leri otomatik siler ve gerektiğinde
-/// yenisini oluşturur (bkz. `wm.rs`).
+/// Tek bir monitordeki tek bir workspace. `mode = "dynamic"` oldugunda WM,
+/// `is_empty()` true donen workspace'leri otomatik siler ve gerektiginde
+/// yenisini olusturur (bkz. `wm.rs::prune_empty_workspaces`).
 pub struct Workspace {
     pub id: usize,
     pub name: Option<String>,

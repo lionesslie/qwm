@@ -160,6 +160,31 @@ impl BspTree {
         }
     }
 
+    /// İki pencerenin ağaçtaki yerlerini (konumlarını, oranlarını DEĞİL,
+    /// sadece hangi yaprakta hangi pencere görüneceğini) değiştirir. Bu,
+    /// `qwmctl node -s <yön>` ile eşlenen `NodeSwap` aksiyonunun temelidir.
+    pub fn swap_windows(&mut self, a: Window, b: Window) {
+        if let Some(root) = &mut self.root {
+            Self::swap_in(root, a, b);
+        }
+    }
+
+    fn swap_in(node: &mut Node, a: Window, b: Window) {
+        match node {
+            Node::Leaf(w) => {
+                if *w == a {
+                    *w = b;
+                } else if *w == b {
+                    *w = a;
+                }
+            }
+            Node::Split { first, second, .. } => {
+                Self::swap_in(first, a, b);
+                Self::swap_in(second, a, b);
+            }
+        }
+    }
+
     pub fn windows(&self) -> Vec<Window> {
         let mut out = Vec::new();
         if let Some(root) = &self.root {

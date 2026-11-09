@@ -110,6 +110,18 @@ action = "reload_config"
 keys = "Mod+Shift+q"
 action = "quit"
 
+[[mousebind]]
+button = "Mod+Button1"
+action = "move"
+
+[[mousebind]]
+button = "Mod+Button3"
+action = "resize"
+
+[[mousebind]]
+button = "Button2"
+action = "focus"
+
 [[rule]]
 class = "^Pavucontrol$"
 floating = true
