@@ -1,7 +1,7 @@
 use anyhow::Result;
 use qwm_core::config::{self, Config};
 use qwm_core::ipc::{self, protocol::Response};
-use qwm_core::keybind::Action;
+use qwm_core::keybind::{self, Action};
 use qwm_core::wm::Wm;
 use qwm_core::x11::connection::XConn;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
@@ -10,6 +10,27 @@ use std::sync::mpsc::{self, Sender};
 use tracing_subscriber::EnvFilter;
 
 fn main() -> Result<()> {
+    // `qwm` bir WM baslatmadan, sadece `qwm.toml`'daki `[[keybind]]`
+    // listesinden bir sxhkd config'i uretip cikar. qwm artik tuslari
+    // kendisi gripli-emez (XGrabKey yerine sxhkd kullanilir, bkz. README);
+    // bu komut iki ayri config dosyasi elle senkron tutmak zorunda
+    // kalmamak icin tek kaynaktan (qwm.toml) uretim yapar.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(flag_pos) = args.iter().position(|a| a == "--export-sxhkd") {
+        let config_path = config::default_config_path();
+        let config = config::load(&config_path)
+            .map_err(|err| anyhow::anyhow!("config okunamadi ({}): {err:#}", config_path.display()))?;
+        let sxhkdrc = export_sxhkd(&config);
+        match args.get(flag_pos + 1) {
+            Some(out_path) => {
+                std::fs::write(out_path, sxhkdrc)?;
+                eprintln!("sxhkdrc yazildi: {out_path}");
+            }
+            None => print!("{sxhkdrc}"),
+        }
+        return Ok(());
+    }
+
     install_panic_hook();
 
     let config_path = config::default_config_path();
@@ -102,6 +123,45 @@ fn run_autostart(config: &Config) {
             }
         }
     }
+}
+
+/// `config.keybinds`'ten bir `sxhkdrc` icerigi uretir. `qwm.toml`'daki
+/// `"Mod"` token'i sxhkd'nin `super` anahtar kelimesine, diger token'lar
+/// (harfler, `Return`, `grave` vb.) oldugu gibi gecer; sxhkd bu isimleri
+/// zaten X11 keysym adlariyla ayni sekilde cozumler.
+fn export_sxhkd(config: &Config) -> String {
+    let mut out = String::new();
+    out.push_str("# qwm.toml'daki [[keybind]] listesinden uretildi, elle duzenlemeyin.\n");
+    out.push_str("# Yeniden uretmek icin: qwm --export-sxhkd ~/.config/sxhkd/sxhkdrc\n\n");
+
+    for kb in &config.keybinds {
+        let Some(action) = keybind::action_from_keybind(kb) else {
+            eprintln!("# atlanildi (taninmayan aksiyon): {} -> {}", kb.keys, kb.action);
+            continue;
+        };
+        let Some(command) = keybind::action_to_qwmctl_command(&action) else {
+            continue; // orn. Query: sxhkd icin anlamli degil
+        };
+        out.push_str(&sxhkd_chain(&kb.keys));
+        out.push('\n');
+        out.push_str("    ");
+        out.push_str(&command);
+        out.push_str("\n\n");
+    }
+    out
+}
+
+fn sxhkd_chain(spec: &str) -> String {
+    spec.split('+')
+        .map(|part| match part {
+            "Mod" | "Super" => "super",
+            "Shift" => "shift",
+            "Ctrl" | "Control" => "ctrl",
+            "Alt" => "alt",
+            other => other,
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
 }
 
 fn install_panic_hook() {

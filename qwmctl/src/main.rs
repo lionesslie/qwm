@@ -35,6 +35,9 @@ enum Cmd {
         /// Odaklı pencereyi başka bir workspace'e taşı
         #[arg(short = 'd', long)]
         to_workspace: Option<String>,
+        /// Split oranını değiştir: "<yön>:<yüzde>" (ör. "west:10")
+        #[arg(long)]
+        resize: Option<String>,
         /// Odaklı pencereyi kapat (hiçbir bayrak verilmezse varsayılan davranış)
         #[arg(short = 'c', long)]
         close: bool,
@@ -76,6 +79,7 @@ fn main() -> Result<()> {
             swap,
             toggle,
             to_workspace,
+            resize,
             close,
         } => {
             if let Some(dir) = focus {
@@ -90,10 +94,18 @@ fn main() -> Result<()> {
                 }
             } else if let Some(target) = to_workspace {
                 json!({"cmd": "node_to_workspace", "args": {"target": target}})
+            } else if let Some(spec) = resize {
+                let (dir, amount) = spec
+                    .split_once(':')
+                    .context("--resize \"<yön>:<yüzde>\" biçiminde olmalı (ör. \"west:10\")")?;
+                let amount: i32 = amount
+                    .parse()
+                    .context("--resize'daki yüzde bir tam sayı olmalı")?;
+                json!({"cmd": "node_resize", "args": {"direction": dir, "amount": amount}})
             } else if close {
                 json!({"cmd": "node_close", "args": {}})
             } else {
-                anyhow::bail!("node için en az bir bayrak gerekli: -f/-s/-t/-d/-c");
+                anyhow::bail!("node için en az bir bayrak gerekli: -f/-s/-t/-d/-c/--resize");
             }
         }
         Cmd::Desktop { focus } => json!({

@@ -9,8 +9,9 @@ tarzı dinamik binary-space-partitioning (BSP) tiling pencere yöneticisi.**
 
 Mekanizma WM'de, politika config'de ve CLI'da: `qwm` arka planda çalışan ince
 bir tiling motorudur, tüm kontrol `qwmctl` adlı ayrı bir CLI ile (bspwm'deki
-`bspc` gibi) Unix socket üzerinden yapılır. WM-içi keybinding'ler de aynı
-komut kümesini dahili olarak tetikler.
+`bspc` gibi) Unix socket üzerinden yapılır. Klavye kısayolları da bspwm'in
+kendi felsefesine uyarak `sxhkd`'ye bırakılmıştır — qwm `[[keybind]]`
+listesinden otomatik bir `sxhkdrc` üretir, tuşları kendisi gripli-emez.
 
 > ⚠️ **Durum:** Aktif geliştirme aşamasında. Çekirdek tiling,
 > multi-monitor, config/hot-reload, IPC/`qwmctl`, floating rules,
@@ -28,7 +29,7 @@ komut kümesini dahili olarak tetikler.
 - [Kurulum](#kurulum)
 - [Hızlı başlangıç](#hızlı-başlangıç)
 - [Yapılandırma](#yapılandırma)
-- [Varsayılan keybinding'ler](#varsayılan-keybindingler)
+- [Keybinding'ler: sxhkd](#keybindingler-sxhkd)
 - [qwmctl](#qwmctl)
 - [Display manager entegrasyonu](#display-manager-entegrasyonu)
 - [Geliştirme](#geliştirme)
@@ -49,8 +50,10 @@ komut kümesini dahili olarak tetikler.
   komutuyla anında uygulanır
 - **IPC / `qwmctl`** — tüm WM işlevlerine Unix socket üzerinden erişim,
   `query --windows` ile scriptlenebilir çıktı
-- **Gerçek `XGrabKey` keybinding sistemi** — config'deki `[[keybind]]`
-  listesi WM-içi tuşları doğrudan bağlar
+- **Keybinding'ler `sxhkd` ile** — qwm kendisi `XGrabKey` yapmaz (bspwm'in
+  felsefesine uyarak: mekanizma WM'de, tuş dinleme ayrı bir daemon'da);
+  `qwm --export-sxhkd` komutu `qwm.toml`'daki `[[keybind]]` listesinden
+  doğrudan bir `sxhkdrc` üretir, böylece tek bir config dosyası yeterli olur
 - **Floating window rules** — class/instance/title regex eşleştirme,
   boyut/konum/merkezleme, workspace atama
 - **Scratchpad** — adlandırılmış, toggle edilebilir gizli pencereler
@@ -82,9 +85,10 @@ qwm/
 └── .github/    # CI workflow'u (cargo build/test/fmt/clippy)
 ```
 
-`qwm-core` içindeki `wm::Wm`, X11 event loop'unu ve `Action` enum'u
-üzerinden gelen tüm komutları (hem WM-içi keybinding'lerden hem
-`qwmctl`'den) işleyen tek state makinesidir.
+`qwm-core` içindeki `wm::Wm`, X11 event loop'unu ve `qwmctl`'den (ya da
+`sxhkd`'nin çağırdığı `qwmctl`'den) gelen tüm komutları temsil eden
+`Action` enum'unu işleyen tek state makinesidir. qwm kendisi klavye
+tuşlarını dinlemez — bkz. [Keybinding'ler: sxhkd](#keybindingler-sxhkd).
 
 ## Kurulum
 
@@ -92,9 +96,14 @@ qwm/
 
 - Rust (stable, 2021 edition)
 - X11 çalışan bir Linux sistemi
+- **[`sxhkd`](https://github.com/baskerville/sxhkd)** — klavye
+  kısayolları için (bspwm'in de kullandığı araç). Çoğu dağıtımın paket
+  deposunda var: `pacman -S sxhkd`, `apt install sxhkd`, vb. Zorunlu
+  değildir (qwm `qwmctl` ile hâlâ tam kontrol edilebilir) ama pratikte
+  klavyeden kullanmak için gereklidir.
 
-Ek sistem bağımlılığı yoktur; `x11rb` XCB protokolünü doğrudan soket
-üzerinden konuşur, bir C X11 kütüphanesine bağlanmaz.
+Derleme için ek sistem bağımlılığı yoktur; `x11rb` XCB protokolünü
+doğrudan soket üzerinden konuşur, bir C X11 kütüphanesine bağlanmaz.
 
 ### Kaynaktan derleme
 
@@ -231,7 +240,35 @@ metin çizimi (`ImageText8` + "fixed" cekirdek fontu) kullanılır; bu
 yüzden `[bar] font` ayarı şu an **göz ardı edilir**. `modules_right`
 (saat/pil vb.) henüz implemente edilmedi.
 
-## Varsayılan keybinding'ler
+## Keybinding'ler: sxhkd
+
+qwm, bspwm gibi klavye dinlemeyi kendi üzerine almaz: `XGrabKey` ve
+keysym/keycode eşleme gibi en kırılgan X11 detaylarını büsbütün devre
+dışı bırakıp bu işi olgun ve test edilmiş bir araca (`sxhkd`) bırakır.
+`qwm.toml`'daki `[[keybind]]` listesi **tek kaynak** olarak kalır —
+`sxhkdrc`'yi elle yazıp iki config'i senkron tutmanıza gerek yok:
+
+```sh
+mkdir -p ~/.config/sxhkd
+qwm --export-sxhkd ~/.config/sxhkd/sxhkdrc
+```
+
+Bunu `[autostart]` listesine ekleyin ki qwm her başladığında sxhkd de
+çalışsın:
+
+```toml
+[autostart]
+commands = [
+    "sxhkd -c ~/.config/sxhkd/sxhkdrc",
+]
+```
+
+Config'i değiştirdiğinizde `qwm --export-sxhkd ...` komutunu tekrar
+çalıştırıp `pkill -USR1 -x sxhkd` ile sxhkd'yi yeniden yükletin (sxhkd'nin
+kendi hot-reload sinyali budur).
+
+`docs/default-config.toml`'daki varsayılan `[[keybind]]` listesi
+şunları üretir:
 
 | Tuş | Aksiyon |
 |---|---|
@@ -248,6 +285,19 @@ yüzden `[bar] font` ayarı şu an **göz ardı edilir**. `modules_right`
 | `Mod+Shift+r` | config'i yeniden yükle |
 | `Mod+Shift+q` | qwm'den çık |
 
+Üretilen `sxhkdrc`'nin bir örneği:
+
+```
+super + Return
+    alacritty
+
+super + h
+    qwmctl node -f west
+
+super + shift + q
+    qwmctl quit
+```
+
 ## qwmctl
 
 bspwm'deki `bspc`'ye paralel tasarlanmış CLI:
@@ -259,6 +309,7 @@ qwmctl node -t floating          # tiled <-> floating
 qwmctl node -t monocle           # monocle aç/kapa
 qwmctl node -t fullscreen        # fullscreen aç/kapa
 qwmctl node -d 3                 # odaklı pencereyi workspace 3'e taşı
+qwmctl node --resize west:10     # split oranını batıya doğru %10 kaydır
 qwmctl desktop -f 3              # workspace 3'e geç
 qwmctl config reload
 qwmctl query --windows           # mevcut pencere listesini JSON olarak döker
@@ -303,15 +354,16 @@ hiç denenemedi. İlk derlemede karşılaşabileceğiniz muhtemel noktalar:
 
 - `x11rb` 0.13 API'si (`ConnectionExt`, `atom_manager!` makrosu) sürüm
   güncellemeleriyle değişmiş olabilir.
-- `wm.rs` içindeki `create_window` çağrısının depth parametresi (`0`)
-  bazı sürümlerde `x11rb::COPY_DEPTH_FROM_PARENT` sabitiyle ifade
-  edilmesi gerekebilir.
+- `wm.rs` ve `bar/mod.rs` içindeki `create_window` çağrılarının depth
+  parametresi (`0`) bazı sürümlerde `x11rb::COPY_DEPTH_FROM_PARENT`
+  sabitiyle ifade edilmesi gerekebilir.
 - `close_window` içindeki `ClientMessageEvent::new(...)` /
   `send_event(..., EventMask::NO_EVENT, ...)` imzaları sürüme göre
   hafifçe farklılaşabilir.
-- `grab_keys` içindeki `ModMask::from(u16)` / `u16::from(ModMask)`
-  dönüşümleri desteklenmiyorsa, doğrudan tuple-struct erişimine
-  (`ModMask(combined)`) çevrilmesi gerekebilir.
+- `grab_buttons` içindeki `ModMask::from(u16)` / `u16::from(ModMask)`
+  dönüşümleri (yalnızca mouse bind'lar için kullanılır, bkz. aşağı)
+  desteklenmiyorsa, doğrudan tuple-struct erişimine (`ModMask(combined)`)
+  çevrilmesi gerekebilir.
 - `signal-hook` 0.3 API'si (`Signals::new`, `.forever()`) sürüm
   güncellemeleriyle değişmiş olabilir; `qwm/src/main.rs::install_signal_handlers`
   bu yüzden ilk derlemede küçük bir düzeltme isteyebilir.
@@ -337,7 +389,7 @@ Orijinal spesifikasyonun fazlarına göre durum:
 | 1 | BSP tiling (split/swap/resize/close) | ✅ temel; preselect ve mouse resize yok |
 | 2 | Multi-monitor + dinamik workspace | ✅ temel; hot-plug ve monitörler arası focus/swap yok |
 | 3 | TOML config + hot-reload | ✅ |
-| 4 | IPC/`qwmctl` + WM-içi keybinding (`XGrabKey`) | ✅ |
+| 4 | IPC/`qwmctl` + keybinding | ✅ — `XGrabKey` yerine `sxhkd` (bkz. `qwm --export-sxhkd`); mouse bind'lar hâlâ dahili `XGrabButton` ile |
 | 5 | Tam EWMH/ICCCM | ✅ temel (strut, `_NET_WM_STATE`, `WM_NORMAL_HINTS` min boyut, transient-for); max boyut/aspect/increment, tam viewport semantiği yok |
 | 6 | Floating rules, scratchpad, monocle, preselect | ✅ preselect hariç |
 | 7 | Dahili bar, autostart, sinyal yönetimi, mouse move/resize, cilalama | ✅ temel; autostart, sinyal yönetimi (SIGHUP/SIGTERM/SIGINT), dahili bar (çekirdek X11 çizim) ve mouse move/resize çalışıyor. Eksik: barda sağ modüller (saat/pil), monitör hot-plug, genel cilalama/performans geçişi |

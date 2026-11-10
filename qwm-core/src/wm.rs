@@ -52,8 +52,6 @@ pub struct Wm {
     /// match_class -> scratchpad adi. Scratchpad komutu calistirildiktan
     /// sonra, ilgili class'la map olan ilk pencere bu isimdeki slota baglanir.
     pub pending_scratchpad: HashMap<String, String>,
-    /// (keycode, modifier_bits) -> Action. `grab_keys()` tarafindan doldurulur.
-    pub key_bindings: HashMap<(u8, u16), Action>,
     /// `_NET_WM_WINDOW_TYPE_DOCK` olarak map edilen pencereler (polybar,
     /// waybar vb.). Tiling'e dahil edilmez, yalnizca strut hesabinda kullanilir.
     pub docks: HashSet<Window>,
@@ -147,7 +145,6 @@ impl Wm {
             rules,
             scratchpad: ScratchpadState::default(),
             pending_scratchpad: HashMap::new(),
-            key_bindings: HashMap::new(),
             docks: HashSet::new(),
             struts: HashMap::new(),
             mouse_bindings: HashMap::new(),
@@ -230,7 +227,6 @@ impl Wm {
         )?;
         conn.flush()?;
 
-        self.grab_keys()?;
         self.grab_buttons()?;
 
         if self.config.bar.enabled && !self.monitors.is_empty() {
@@ -283,7 +279,6 @@ impl Wm {
             Event::UnmapNotify(ev) => self.on_unmap(ev.window)?,
             Event::DestroyNotify(ev) => self.on_unmap(ev.window)?,
             Event::ConfigureRequest(ev) => self.on_configure_request(ev)?,
-            Event::KeyPress(ev) => self.on_key_press(ev)?,
             Event::ClientMessage(ev) => self.on_client_message(ev)?,
             Event::PropertyNotify(ev) => self.on_property_notify(ev)?,
             Event::ButtonPress(ev) => self.on_button_press(ev)?,
@@ -516,16 +511,6 @@ impl Wm {
         Ok(())
     }
 
-    fn on_key_press(&mut self, ev: KeyPressEvent) -> Result<()> {
-        // CapsLock durumunu yok sayan basit bir maskeleme; NumLock henuz
-        // ele alinmiyor (bkz. README).
-        let masked = ev.state & !(u16::from(ModMask::LOCK));
-        if let Some(action) = self.key_bindings.get(&(ev.detail, masked)).cloned() {
-            let _ = self.handle_action(action);
-        }
-        Ok(())
-    }
-
     // --- Mouse move/resize ---
 
     fn on_button_press(&mut self, ev: ButtonPressEvent) -> Result<()> {
@@ -723,79 +708,6 @@ impl Wm {
             .unwrap_or_default();
         bar.redraw(&self.xc.conn, &labels, &title)?;
         Ok(())
-    }
-
-    // --- Keybinding grab ---
-
-    fn grab_keys(&mut self) -> Result<()> {
-        let root = self.xc.root();
-        self.xc.conn.ungrab_key(0u8, root, ModMask::ANY)?;
-        self.key_bindings.clear();
-
-        for kb in self.config.keybinds.clone() {
-            let Some(parsed) = keybind::parse_keys(&kb.keys) else {
-                tracing::warn!("keybinding parse edilemedi: {}", kb.keys);
-                continue;
-            };
-            let Some(action) = keybind::action_from_keybind(&kb) else {
-                tracing::warn!("keybinding aksiyonu taninmiyor: {} ({})", kb.keys, kb.action);
-                continue;
-            };
-            let Some(keycode) = self.keysym_to_keycode(parsed.keysym) else {
-                tracing::warn!("keysym icin keycode bulunamadi: {}", kb.keys);
-                continue;
-            };
-
-            let mut bits: u16 = 0;
-            if parsed.mods.mod_mask {
-                bits |= u16::from(ModMask::M4); // Super genelde Mod4
-            }
-            if parsed.mods.shift {
-                bits |= u16::from(ModMask::SHIFT);
-            }
-            if parsed.mods.ctrl {
-                bits |= u16::from(ModMask::CONTROL);
-            }
-            if parsed.mods.alt {
-                bits |= u16::from(ModMask::M1);
-            }
-
-            // CapsLock acik/kapaliyken de calissin diye iki kombinasyonu
-            // da griple; NumLock varyanti eklenmedi (bkz. README).
-            for extra in [0u16, u16::from(ModMask::LOCK)] {
-                let combined = bits | extra;
-                self.xc
-                    .conn
-                    .grab_key(true, root, ModMask::from(combined), keycode, GrabMode::ASYNC, GrabMode::ASYNC)?;
-                self.key_bindings.insert((keycode, combined), action.clone());
-            }
-        }
-        self.xc.conn.flush()?;
-        Ok(())
-    }
-
-    fn keysym_to_keycode(&self, keysym: u32) -> Option<u8> {
-        let setup = self.xc.conn.setup();
-        let min_kc = setup.min_keycode;
-        let max_kc = setup.max_keycode;
-        let count = max_kc - min_kc + 1;
-        let mapping = self
-            .xc
-            .conn
-            .get_keyboard_mapping(min_kc, count)
-            .ok()?
-            .reply()
-            .ok()?;
-        let per = mapping.keysyms_per_keycode as usize;
-        if per == 0 {
-            return None;
-        }
-        for (i, chunk) in mapping.keysyms.chunks(per).enumerate() {
-            if chunk.iter().any(|&ks| ks == keysym) {
-                return Some(min_kc + i as u8);
-            }
-        }
-        None
     }
 
     // --- ICCCM property okuma ---
@@ -1594,7 +1506,6 @@ impl Wm {
                 let bar_was_enabled = self.config.bar.enabled;
                 self.config = new_cfg;
                 self.rules = rules::compile_rules(&self.config.rules);
-                self.grab_keys()?;
                 self.grab_buttons()?;
 
                 if self.config.bar.enabled && !bar_was_enabled && !self.monitors.is_empty() {

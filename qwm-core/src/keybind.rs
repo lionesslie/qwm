@@ -122,6 +122,32 @@ pub fn action_from_keybind(kb: &Keybind) -> Option<Action> {
     }
 }
 
+/// Bir `Action`'i, `qwmctl` CLI'sinin kabul edecegi tam komut satirina
+/// cevirir. `sxhkd` gibi harici bir hotkey daemon'u icin komut uretmekte
+/// kullanilir (bkz. `qwm --export-sxhkd`); boylece `[[keybind]]` listesi,
+/// WM-ici grab olmasa da tek kaynak (single source of truth) olmaya devam
+/// eder. `Query` gibi sxhkd icin anlamsiz aksiyonlar icin `None` doner.
+pub fn action_to_qwmctl_command(action: &Action) -> Option<String> {
+    Some(match action {
+        Action::Spawn { command } => return Some(command.clone()),
+        Action::NodeClose => "qwmctl node -c".to_string(),
+        Action::Focus { direction } => format!("qwmctl node -f {direction}"),
+        Action::NodeSwap { direction } => format!("qwmctl node -s {direction}"),
+        Action::NodeResize { direction, amount } => {
+            format!("qwmctl node --resize {direction}:{amount}")
+        }
+        Action::WorkspaceSwitch { target } => format!("qwmctl desktop -f {target}"),
+        Action::NodeToWorkspace { target } => format!("qwmctl node -d {target}"),
+        Action::ToggleFloating => "qwmctl node -t floating".to_string(),
+        Action::ToggleMonocle => "qwmctl node -t monocle".to_string(),
+        Action::ToggleFullscreen => "qwmctl node -t fullscreen".to_string(),
+        Action::ScratchpadToggle { name } => format!("qwmctl scratchpad toggle {name}"),
+        Action::ReloadConfig => "qwmctl config reload".to_string(),
+        Action::Quit => "qwmctl quit".to_string(),
+        Action::Query { .. } => return None,
+    })
+}
+
 /// `[[mousebind]]` config girdilerinin aksiyonu: `move`/`resize` floating
 /// pencereyi surukler (tiled ise once floating'e cikarir), `focus` ise
 /// yalnizca tiklanan pencereye odaklanir.
